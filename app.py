@@ -45,8 +45,13 @@ def contar_numeros(denominador):
 # Directorio de entrada
 in_dir = './in'
 # Aspectos a evaluar en al materia
-aspectos_a_evaluar = ['Tarea', 'Participación',
-                      'Evaluación', 'Área formativa', 'Conducta']
+aspectos_a_evaluar = (
+    'Área formativa',
+    'Evaluación',
+    'Participación',
+    'Tarea',
+    'Conducta'
+)
 
 # Obtener la lista de archivos en el directorio de entrada
 file_list = os.listdir(in_dir)
@@ -55,6 +60,9 @@ grupo = Grupo(1, "D")
 # materia = Materia('Science', aspectos_a_evaluar)
 parciales = [1, 2, 3]
 materia = grupo.agregar_materia('Science', aspectos_a_evaluar)
+
+for aspecto in materia.get_a_evaluar():
+    print(aspecto)
 
 # Recorrer la lista de archivos y leer cada archivo en un DataFrame
 for file in file_list:
@@ -134,6 +142,7 @@ encabezado_algebrix = ['Estudiante',
 
 
 txt_title = ''
+promedio_general = []
 for title in encabezados:
     txt_title += f"{title}\t"
 print(txt_title)
@@ -142,17 +151,21 @@ for alumno in grupo.get_alumnos():
     for aspecto in materia.get_a_evaluar():
         for indice in materia.get_parciales():
             lista = alumno.get_calificaciones()[indice - 1]
-            alumno_calificaciones = f"{alumno_calificaciones}\t{promedio(lista[aspecto])} "
-    print(alumno.get_nombre_completo(), alumno_calificaciones)
+            alumno_calificaciones += f"\t{promedio(lista[aspecto])}"
+            if isinstance(promedio(lista[aspecto]), float):
+                promedio_general.append(promedio(lista[aspecto]))
+    print(alumno.get_nombre_completo(),
+          alumno_calificaciones, promedio(promedio_general))
 
 
-ws.append(encabezados)
+ws.append(encabezado_algebrix)
 for alumno in grupo.get_alumnos():
     fila = [alumno.get_nombre_completo()]
     for aspecto in materia.get_a_evaluar():
         for indice in materia.get_parciales():
             lista = alumno.get_calificaciones()[indice - 1]
             fila.append(promedio(lista[aspecto]))
+    fila.insert(13, 0)
     ws.append(fila)
 
 # Guardar el archivo de Excel
