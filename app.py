@@ -1,8 +1,6 @@
 from models.Grupo import Grupo
-import os
-import re
+import os, sys, re, openpyxl
 import pandas as pd
-import openpyxl
 
 # Crear un nuevo archivo de Excel
 wb = openpyxl.Workbook()
@@ -27,16 +25,15 @@ def convert_to_float(val):
 
 def promedio(numeros):
     if len(numeros) == 1 and numeros[0] == 0:
-        return ''
-    return round(sum(numeros)/contar_numeros(numeros), 1)
+        return 0
+    return round(sum(numeros)/contar_si_es_numeros(numeros), 1)
 
 
-def contar_numeros(denominador):
+def contar_si_es_numeros(denominador):
     contador = 0
     for elem in denominador:
         if isinstance(elem, str) and elem.isnumeric():
-            print(elem)
-            contador = contador
+            pass
         elif isinstance(elem, float):
             contador += 1
     return contador
@@ -44,6 +41,7 @@ def contar_numeros(denominador):
 
 # Directorio de entrada
 in_dir = './in'
+
 # Aspectos a evaluar en al materia
 aspectos_a_evaluar = (
     'Área formativa',
@@ -56,13 +54,15 @@ aspectos_a_evaluar = (
 # Obtener la lista de archivos en el directorio de entrada
 file_list = os.listdir(in_dir)
 
-grupo = Grupo(1, "D")
-# materia = Materia('Science', aspectos_a_evaluar)
-parciales = [1, 2, 3]
-materia = grupo.agregar_materia('Science', aspectos_a_evaluar)
+if not file_list:
+    print("No se encontraron archivos en el directorio 'in'.")
+    salir = input('Asegurate de poner archivos con el formato en el folder in')
+    sys.exit()
 
-for aspecto in materia.get_a_evaluar():
-    print(aspecto)
+grupo = Grupo(1, "D")
+trimestres = [1, 2, 3, 4]
+parciales = [1, 2, 3]
+_grupo = None
 
 # Recorrer la lista de archivos y leer cada archivo en un DataFrame
 for file in file_list:
@@ -70,23 +70,29 @@ for file in file_list:
         # Construir la ruta completa del archivo
         file_path = os.path.join(in_dir, file)
         file_name = str(file)
+        # print(file_name)
+        # expresiones regulares para buscar las variables
+        # identificar el gruapo materia trimestre parcial desde el nombre del archivo:
+
+        # Leer el archivo de excel para buscar las primeras variables
         df0 = pd.read_excel(file_path, skiprows=4, header=None)
+        # agregar la materia:
+        nombre_materia = df0.iloc[0, 2]
+        materia = grupo.agregar_materia(nombre_materia, aspectos_a_evaluar)
+        # Agregar el numero del parcial:
         texto = df0.iloc[0, 3]
         patron = r"\d+[a-zA-Z]{2}\."
         match = re.search(patron, texto)
         if match:
-            parcial_int = int(match.group(0)[:-3])
-        else:
-            parcial_int = None
-        # print(parcial_int, texto)
-        materia.set_parcial(parcial_int)
+            parcial_actual = materia.set_parcial(int(match.group(0)[:-3]))
+
         df1 = pd.read_excel(file_path, skiprows=5, header=None)
         # Cuenta las ocurrencias de cada palabra en el primer row
         counts = df1.iloc[0].value_counts()
         # Sacar los indices dependiendo de las ocurrecias de lo que se califica:
         # tarea participación evaluación "área formativa" conducta
         start = 6
-        for aspecto in aspectos_a_evaluar:
+        for aspecto in materia.get_a_evaluar():
             end = start + counts.get(aspecto, 0) - 1
             globals()[f"{aspecto}_start"] = start
             start = end + 1
@@ -112,26 +118,42 @@ for file in file_list:
                     globals()[f"{aspecto}"] = [convert_to_float(valor)for valor in row
                                                [globals().get(f'{aspecto}_start', 'Variable no definida'): globals().get(f'{aspecto}_end', 'Variable no definida')]]
                     calificacion[aspecto] = globals().get(aspecto)
-                alumno.set_calificaciones(parcial_int, calificacion)
+                alumno.set_calificaciones(parcial_actual, calificacion)
 
-sin_calificaciones = {'Tarea': [0], 'Participación': [
-    0], 'Evaluación': [0], 'Área formativa': [0], 'Conducta': [0]}
+
+# llenar los parciales que todavia no se califican
+# sin_calificaciones = {'Tarea': [0], 'Participación': [    0], 'Evaluación': [0], 'Área formativa': [0], 'Conducta': [0]}
+sin_calificaciones = {}
+for aspecto in materia.get_a_evaluar():
+    sin_calificaciones[aspecto] = [convert_to_float('nan')]
 diferencia = set(parciales) - set(materia.get_parciales())
 if len(diferencia) > 0:
     for parcial_faltante_de_3 in list(diferencia):
         materia.set_parcial(parcial_faltante_de_3)
         for alumno in grupo.get_alumnos():
-            alumno.set_calificaciones(
-                parcial_faltante_de_3, sin_calificaciones)
-
+            alumno.set_calificaciones(parcial_faltante_de_3, sin_calificaciones)
 
 # Crear encabezados
 encabezados = ['Nombre', 'Área formativa 1', 'Área formativa 2', 'Área formativa 3',
                'Evaluación 1', 'Evaluación 2', 'Evaluación 3',
                'Participación 1', 'Participación 2', 'Participación 3',
                'Tarea 1', 'Tarea 2', 'Tarea 3',
-               'Conducta 1', 'Conducta 2', 'Conducta 3']
-
+               'Conducta 1', 'Conducta 2', 'Conducta 3',
+               'Promedio General']
+# Crear un encabezado corto para la impersion en terminal
+nuevos_encabezados = []
+for encabezado in encabezados:
+    if encabezado == 'Nombre':
+        # nuevos_encabezados.append('Nombre')
+        pass
+    else:
+        palabras = encabezado.split()
+        new_encabezado = ''
+        for palabra in palabras:
+            if palabra[0]:
+                new_encabezado += palabra[0].upper()
+        nuevos_encabezados.append(new_encabezado)
+# encabezado para el archivo de excel
 encabezado_algebrix = ['Estudiante',
                        'Science 1 (Biology) : Área formativa 1 ( 3.3% )', 'Science 1 (Biology) : Área formativa 2 ( 3.3% )', 'Science 1 (Biology) : Área formativa 3 ( 3.4% )',
                        'Science 1 (Biology) : Examen parcial 1 ( 15.0% )', 'Science 1 (Biology) : Examen parcial 2 ( 15.0% )', 'Science 1 (Biology) : Examen parcial 3 ( 15.0% )',
@@ -140,22 +162,40 @@ encabezado_algebrix = ['Estudiante',
                        'Science 1 (Biology) : Puntos extra',
                        'Conducta 1', 'Conducta 2', 'Conducta 3']
 
-
-txt_title = ''
+print('\n\n')
+first_column_width = 20
+data_column_width = 7
 promedio_general = []
-for title in encabezados:
-    txt_title += f"{title}\t"
-print(txt_title)
-for alumno in grupo.get_alumnos():
-    alumno_calificaciones = ''
-    for aspecto in materia.get_a_evaluar():
-        for indice in materia.get_parciales():
-            lista = alumno.get_calificaciones()[indice - 1]
-            alumno_calificaciones += f"\t{promedio(lista[aspecto])}"
-            if isinstance(promedio(lista[aspecto]), float):
-                promedio_general.append(promedio(lista[aspecto]))
-    print(alumno.get_nombre_completo(),
-          alumno_calificaciones, promedio(promedio_general))
+# calculas el valor del numeor maximo de caractres para la columna de nombre
+first_column_width = max(len(alumno.get_nombre_completo()) for alumno in grupo.get_alumnos()) + 3
+        
+txt_title = 'Nombre'.ljust(first_column_width)
+for title in nuevos_encabezados:
+    txt_title += title.ljust(data_column_width)
+for materia in grupo.get_materias():
+    print(f"\tGrupo: {grupo.get_grupo()} Materia: {materia.nombre}\n")
+    print(f"")
+    print(f"{txt_title}")
+    for alumno in grupo.get_alumnos():
+        alumno_calificaciones = ''
+        for aspecto in materia.get_a_evaluar():
+            for indice in materia.get_parciales():
+                lista = alumno.get_calificaciones()[indice - 1]
+                if isinstance(promedio(lista[aspecto]), float):
+                    alumno_calificaciones += str(
+                        promedio(lista[aspecto])).ljust(data_column_width)
+                    promedio_general.append(promedio(lista[aspecto]))
+                else:
+                    alumno_calificaciones += str('').ljust(data_column_width)
+        print(
+            f"{alumno.get_nombre_completo().ljust(first_column_width)}{alumno_calificaciones}{promedio(promedio_general)}")
+        
+# #calificaciones pro alumno
+# for alumno in grupo.get_alumnos():
+#     print(f"\n{alumno.get_nombre_completo()}")
+#     for calificacion in alumno.get_calificaciones():
+#         for parcial in calificacion:
+#             print(f"\t{parcial}: {calificacion[parcial]}")
 
 
 ws.append(encabezado_algebrix)

@@ -15,6 +15,7 @@ class Materia:
 
     def set_parcial(self, parcial):
         self.parciales.append(parcial)
+        return parcial
         
     def promedio(self, numeros):
         return round(sum(numeros)/self.contar_numeros(numeros), 1)

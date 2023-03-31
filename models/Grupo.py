@@ -17,9 +17,12 @@ class Grupo:
             alumno = self.buscar_alumno(nombre, apellido_paterno, apellido_materno)
         return alumno
 
-    def agregar_materia(self, materia, aspectos_a_evaluar):
-        materia = Materia('Science', aspectos_a_evaluar)
-        self.materias.append(materia)
+    def agregar_materia(self, nombre_materia, aspectos_a_evaluar):
+        if self.buscar_materia(nombre_materia) is None:
+            materia = Materia(nombre_materia, aspectos_a_evaluar)
+            self.materias.append(materia)
+        else:
+            materia = self.buscar_materia(nombre_materia)
         return materia
 
     def get_alumnos(self):
@@ -27,6 +30,8 @@ class Grupo:
 
     def get_materias(self):
         return self.materias
+    def get_grupo(self):
+        return f'{self.grado}-{self.letra}'
 
     def buscar_materia(self, nombre_materia):
         for materia in self.materias:
