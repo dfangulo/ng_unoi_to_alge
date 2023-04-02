@@ -1,6 +1,10 @@
 from models.Grupo import Grupo
-import os, sys, re, openpyxl
+import os
+import sys
+import re
+import openpyxl
 import pandas as pd
+from models.Materia import Materia
 
 # Crear un nuevo archivo de Excel
 wb = openpyxl.Workbook()
@@ -51,6 +55,11 @@ aspectos_a_evaluar = (
     'Conducta'
 )
 
+criterios_de_evaluacion_por_materia = {'Educación Socioemocional': ['Parcial', 'Uniforme'],
+                                       'Science': ['Área formativa','Evaluación','Participación','Tarea','Conducta']}
+encabezado_por_materia = {'Educación Socioemocional':[],
+                          'Science':[]}
+
 # Obtener la lista de archivos en el directorio de entrada
 file_list = os.listdir(in_dir)
 
@@ -78,7 +87,9 @@ for file in file_list:
         df0 = pd.read_excel(file_path, skiprows=4, header=None)
         # agregar la materia:
         nombre_materia = df0.iloc[0, 2]
-        materia = grupo.agregar_materia(nombre_materia, aspectos_a_evaluar)
+        for curso in criterios_de_evaluacion_por_materia:
+            if curso == nombre_materia:
+                materia = grupo.agregar_materia(curso, criterios_de_evaluacion_por_materia[curso])
         # Agregar el numero del parcial:
         texto = df0.iloc[0, 3]
         patron = r"\d+[a-zA-Z]{2}\."
@@ -118,20 +129,21 @@ for file in file_list:
                     globals()[f"{aspecto}"] = [convert_to_float(valor)for valor in row
                                                [globals().get(f'{aspecto}_start', 'Variable no definida'): globals().get(f'{aspecto}_end', 'Variable no definida')]]
                     calificacion[aspecto] = globals().get(aspecto)
-                alumno.set_calificaciones(parcial_actual, calificacion)
+                alumno.set_calificaciones(materia.nombre,parcial_actual, calificacion)
 
 
 # llenar los parciales que todavia no se califican
-# sin_calificaciones = {'Tarea': [0], 'Participación': [    0], 'Evaluación': [0], 'Área formativa': [0], 'Conducta': [0]}
-sin_calificaciones = {}
-for aspecto in materia.get_a_evaluar():
-    sin_calificaciones[aspecto] = [convert_to_float('nan')]
-diferencia = set(parciales) - set(materia.get_parciales())
-if len(diferencia) > 0:
-    for parcial_faltante_de_3 in list(diferencia):
-        materia.set_parcial(parcial_faltante_de_3)
-        for alumno in grupo.get_alumnos():
-            alumno.set_calificaciones(parcial_faltante_de_3, sin_calificaciones)
+for materia in grupo.get_materias():
+    sin_calificaciones = {}
+    for aspecto in materia.get_a_evaluar():
+        sin_calificaciones[aspecto] = [convert_to_float('nan')]
+    diferencia = set(parciales) - set(materia.get_parciales())
+    if len(diferencia) > 0:
+        for parcial_faltante_de_3 in list(diferencia):
+            materia.set_parcial(parcial_faltante_de_3)
+            for alumno in grupo.get_alumnos():
+                alumno.set_calificaciones(materia.nombre,
+                    parcial_faltante_de_3, sin_calificaciones)
 
 # Crear encabezados
 encabezados = ['Nombre', 'Área formativa 1', 'Área formativa 2', 'Área formativa 3',
@@ -167,8 +179,9 @@ first_column_width = 20
 data_column_width = 7
 promedio_general = []
 # calculas el valor del numeor maximo de caractres para la columna de nombre
-first_column_width = max(len(alumno.get_nombre_completo()) for alumno in grupo.get_alumnos()) + 3
-        
+first_column_width = max(len(alumno.get_nombre_completo())
+                         for alumno in grupo.get_alumnos()) + 3
+
 txt_title = 'Nombre'.ljust(first_column_width)
 for title in nuevos_encabezados:
     txt_title += title.ljust(data_column_width)
@@ -181,15 +194,15 @@ for materia in grupo.get_materias():
         for aspecto in materia.get_a_evaluar():
             for indice in materia.get_parciales():
                 lista = alumno.get_calificaciones()[indice - 1]
-                if isinstance(promedio(lista[aspecto]), float):
+                if isinstance(promedio(lista[materia.nombre][aspecto]), float):
                     alumno_calificaciones += str(
                         promedio(lista[aspecto])).ljust(data_column_width)
-                    promedio_general.append(promedio(lista[aspecto]))
+                    promedio_general.append(promedio(lista[materia.nombre][aspecto]))
                 else:
                     alumno_calificaciones += str('').ljust(data_column_width)
         print(
             f"{alumno.get_nombre_completo().ljust(first_column_width)}{alumno_calificaciones}{promedio(promedio_general)}")
-        
+    print('\n\n')
 # #calificaciones pro alumno
 # for alumno in grupo.get_alumnos():
 #     print(f"\n{alumno.get_nombre_completo()}")
@@ -198,19 +211,20 @@ for materia in grupo.get_materias():
 #             print(f"\t{parcial}: {calificacion[parcial]}")
 
 
-ws.append(encabezado_algebrix)
-for alumno in grupo.get_alumnos():
-    fila = [alumno.get_nombre_completo()]
-    for aspecto in materia.get_a_evaluar():
-        for indice in materia.get_parciales():
-            lista = alumno.get_calificaciones()[indice - 1]
-            fila.append(promedio(lista[aspecto]))
-    fila.insert(13, 0)
-    ws.append(fila)
+for materia in grupo.get_materias():
+    ws.append(encabezado_algebrix)
+    for alumno in grupo.get_alumnos():
+        fila = [alumno.get_nombre_completo()]
+        for aspecto in materia.get_a_evaluar():
+            for indice in materia.get_parciales():
+                lista = alumno.get_calificaciones()[indice - 1]
+                fila.append(promedio(lista[aspecto]))
+        fila.insert(13, 0)
+        ws.append(fila)
+        # Guardar el archivo de Excel
+        try:
+            wb.save(f"out/{materia.get_nombre()}_calificaciones.xlsx")
+            print('Archivo Guardado con exito')
+        except Exception as e:
+            print("Error\n", str(e))
 
-# Guardar el archivo de Excel
-try:
-    wb.save(f"out/{materia.get_nombre()}_calificaciones.xlsx")
-    print('Archivo Guardado con exito')
-except Exception as e:
-    print("Error\n", str(e))
